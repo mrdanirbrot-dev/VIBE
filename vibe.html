@@ -1,0 +1,437 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>VIBE — общение без границ</title>
+<script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{
+  --bg:#0a0a0f;--surface:#13131a;--surface2:#1a1a24;--accent:#7c3aed;
+  --accent2:#06b6d4;--accent3:#ec4899;--text:#f0f0f5;--muted:#8a8a9a;
+  --green:#22c55e;--red:#ef4444;--radius:14px;
+}
+body{font-family:'Inter',system-ui,sans-serif;background:var(--bg);color:var(--text);height:100vh;overflow:hidden;position:relative}
+body::before{content:'';position:fixed;top:-30%;left:-10%;width:60%;height:70%;background:radial-gradient(circle,rgba(124,58,237,.15),transparent 60%);pointer-events:none;z-index:0}
+body::after{content:'';position:fixed;bottom:-30%;right:-10%;width:60%;height:70%;background:radial-gradient(circle,rgba(6,182,212,.12),transparent 60%);pointer-events:none;z-index:0}
+
+/* — Splash — */
+#splash{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:24px;z-index:100;background:var(--bg)}
+#splash .logo{font-size:clamp(48px,12vw,96px);font-weight:900;letter-spacing:-3px;background:linear-gradient(135deg,var(--accent),var(--accent3),var(--accent2));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;animation:glow 3s ease-in-out infinite alternate;text-transform:lowercase}
+@keyframes glow{0%{filter:drop-shadow(0 0 20px rgba(124,58,237,.4))}100%{filter:drop-shadow(0 0 40px rgba(236,72,153,.5))}}
+#splash .tag{color:var(--muted);font-size:15px;font-weight:400}
+#splash .code-box{text-align:center;display:none}
+#splash .code-label{color:var(--muted);font-size:13px;text-transform:uppercase;letter-spacing:2px;margin-bottom:10px}
+#splash .code-display{font-size:42px;font-weight:800;letter-spacing:10px;background:var(--surface);padding:16px 28px;border-radius:var(--radius);border:1px solid var(--surface2);cursor:pointer;transition:all .2s;user-select:none}
+#splash .code-display:hover{border-color:var(--accent);transform:scale(1.03)}
+#splash .code-hint{color:var(--muted);font-size:13px;margin-top:10px}
+#splash .divider{width:60px;height:1px;background:var(--surface2);margin:4px 0}
+#splash .connect-box{display:flex;flex-direction:column;gap:12px;align-items:center}
+#splash .connect-label{color:var(--muted);font-size:13px;text-transform:uppercase;letter-spacing:2px}
+#splash input{background:var(--surface);border:1px solid var(--surface2);color:var(--text);font-size:22px;font-weight:700;letter-spacing:6px;text-align:center;padding:14px 24px;border-radius:var(--radius);width:220px;outline:none;transition:all .2s;font-family:inherit}
+#splash input:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(124,58,237,.2)}
+#splash input::placeholder{color:var(--muted);font-weight:400}
+#splash .btn-connect{padding:14px 40px;font-size:16px;font-weight:700;background:linear-gradient(135deg,var(--accent),var(--accent3));color:#fff;border:none;border-radius:var(--radius);cursor:pointer;transition:all .2s;font-family:inherit}
+#splash .btn-connect:hover{transform:translateY(-2px);box-shadow:0 10px 30px rgba(124,58,237,.4)}
+#splash .btn-connect:active{transform:translateY(0)}
+#splash .spinner{width:36px;height:36px;border:3px solid var(--surface2);border-top-color:var(--accent);border-radius:50%;animation:spin 1s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+#splash .status{text-align:center;color:var(--muted);font-size:14px}
+
+/* — Chat — */
+#chat{display:none;height:100vh;flex-direction:column;position:relative;z-index:1}
+#chat header{display:flex;align-items:center;gap:14px;padding:14px 18px;background:var(--surface);border-bottom:1px solid var(--surface2)}
+#chat header .avatar{width:42px;height:42px;border-radius:50%;background:linear-gradient(135deg,var(--accent),var(--accent3));display:flex;align-items:center;justify-content:center;font-weight:800;font-size:17px;flex-shrink:0}
+#chat header .info{flex:1;min-width:0}
+#chat header .info .name{font-weight:700;font-size:16px}
+#chat header .info .status-row{font-size:12px;color:var(--green);display:flex;align-items:center;gap:6px}
+#chat header .info .status-row::before{content:'';width:7px;height:7px;border-radius:50%;background:var(--green)}
+#chat header .btn-call{width:42px;height:42px;border-radius:50%;background:var(--surface2);border:none;color:var(--accent2);font-size:20px;cursor:pointer;transition:all .2s;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+#chat header .btn-call:hover{background:var(--accent);color:#fff}
+#chat header .btn-hangup{display:none;background:var(--red);color:#fff}
+
+#messages{flex:1;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:8px;scroll-behavior:smooth}
+#messages::-webkit-scrollbar{width:6px}
+#messages::-webkit-scrollbar-track{background:transparent}
+#messages::-webkit-scrollbar-thumb{background:var(--surface2);border-radius:3px}
+
+.msg{max-width:75%;padding:10px 14px;border-radius:16px;font-size:15px;line-height:1.45;animation:msgIn .3s ease;word-wrap:break-word}
+@keyframes msgIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+.msg.sent{align-self:flex-end;background:linear-gradient(135deg,var(--accent),#6d28d9);border-bottom-right-radius:4px}
+.msg.received{align-self:flex-start;background:var(--surface2);border-bottom-left-radius:4px}
+.msg .time{display:block;font-size:11px;opacity:.6;margin-top:4px}
+.msg.audio{cursor:pointer;display:flex;align-items:center;gap:10px;padding:12px 16px}
+.msg.audio .play-icon{font-size:20px}
+.msg.audio .wave{flex:1;height:24px;display:flex;align-items:center;gap:2px}
+.msg.audio .wave .bar{width:3px;background:currentColor;border-radius:2px;opacity:.6}
+
+#composer{display:flex;align-items:center;gap:10px;padding:12px 16px;background:var(--surface);border-top:1px solid var(--surface2)}
+#composer input[type=text]{flex:1;background:var(--surface2);border:1px solid transparent;color:var(--text);font-size:15px;padding:12px 16px;border-radius:24px;outline:none;transition:all .2s;font-family:inherit}
+#composer input[type=text]:focus{border-color:var(--accent)}
+#composer .btn-send{width:42px;height:42px;border-radius:50%;background:linear-gradient(135deg,var(--accent),var(--accent3));border:none;color:#fff;font-size:18px;cursor:pointer;transition:all .2s;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+#composer .btn-send:hover{transform:scale(1.08)}
+#composer .btn-voice{width:42px;height:42px;border-radius:50%;background:var(--surface2);border:none;color:var(--accent3);font-size:18px;cursor:pointer;transition:all .2s;display:flex;align-items:center;justify-content:center;flex-shrink:0;user-select:none}
+#composer .btn-voice:hover{background:var(--accent3);color:#fff}
+#composer .btn-voice.recording{background:var(--red);color:#fff;animation:pulse 1s infinite}
+@keyframes pulse{0%,100%{transform:scale(1)}50%{transform:scale(1.12)}}
+
+/* — Call overlay — */
+#callOverlay{display:none;position:fixed;inset:0;z-index:200;background:rgba(10,10,15,.95);backdrop-filter:blur(20px);flex-direction:column;align-items:center;justify-content:center;gap:30px}
+#callOverlay.active{display:flex}
+#callOverlay .call-avatar{width:120px;height:120px;border-radius:50%;background:linear-gradient(135deg,var(--accent),var(--accent3));display:flex;align-items:center;justify-content:center;font-size:48px;font-weight:800;animation:callPulse 2s infinite}
+@keyframes callPulse{0%,100%{box-shadow:0 0 0 0 rgba(124,58,237,.4)}50%{box-shadow:0 0 0 20px rgba(124,58,237,0)}}
+#callOverlay .call-name{font-size:24px;font-weight:700}
+#callOverlay .call-timer{font-size:18px;color:var(--muted);font-variant-numeric:tabular-nums}
+#callOverlay .btn-end{width:64px;height:64px;border-radius:50%;background:var(--red);border:none;color:#fff;font-size:26px;cursor:pointer;transition:all .2s;display:flex;align-items:center;justify-content:center}
+#callOverlay .btn-end:hover{transform:scale(1.1)}
+#callOverlay .call-status{color:var(--muted);font-size:15px}
+
+/* — Toast — */
+#toast{position:fixed;bottom:80px;left:50%;transform:translateX(-50%);background:var(--surface2);color:var(--text);padding:12px 24px;border-radius:24px;font-size:14px;font-weight:500;z-index:300;opacity:0;transition:opacity .3s;pointer-events:none;box-shadow:0 8px 24px rgba(0,0,0,.4)}
+#toast.show{opacity:1}
+</style>
+</head>
+<body>
+
+<div id="splash">
+  <div class="logo">vibe</div>
+  <div class="tag">общение без границ</div>
+  <div class="spinner" id="spinner"></div>
+  <div class="status" id="initStatus">Подключение к сети...</div>
+  <div class="code-box" id="codeBox">
+    <div class="code-label">Ваш код</div>
+    <div class="code-display" id="myCode" title="Нажмите, чтобы копировать">------</div>
+    <div class="code-hint">Нажмите на код, чтобы скопировать</div>
+  </div>
+  <div class="divider" id="divider" style="display:none"></div>
+  <div class="connect-box" id="connectBox" style="display:none">
+    <div class="connect-label">Введите код собеседника</div>
+    <input type="text" id="peerInput" maxlength="6" placeholder="000000" inputmode="numeric">
+    <button class="btn-connect" id="btnConnect">Связаться</button>
+  </div>
+</div>
+
+<div id="chat">
+  <header>
+    <div class="avatar" id="peerAvatar">?</div>
+    <div class="info">
+      <div class="name" id="peerName">Собеседник</div>
+      <div class="status-row" id="peerStatus">В сети</div>
+    </div>
+    <button class="btn-call" id="btnCall" title="Позвонить">&#128222;</button>
+    <button class="btn-call btn-hangup" id="btnHangup" title="Завершить">&#128244;</button>
+  </header>
+  <div id="messages"></div>
+  <div id="composer">
+    <button class="btn-voice" id="btnVoice" title="Удерживайте для записи">&#127908;</button>
+    <input type="text" id="textInput" placeholder="Сообщение..." autocomplete="off">
+    <button class="btn-send" id="btnSend" title="Отправить">&#10148;</button>
+  </div>
+</div>
+
+<div id="callOverlay">
+  <div class="call-avatar" id="callAvatar">?</div>
+  <div class="call-name" id="callName">Собеседник</div>
+  <div class="call-status" id="callStatus">Вызов...</div>
+  <div class="call-timer" id="callTimer"></div>
+  <button class="btn-end" id="btnEndCall" title="Завершить">&#128244;</button>
+</div>
+
+<div id="toast"></div>
+
+<script>
+const peerPrefix = 'vibe_';
+let peer = null, conn = null, call = null;
+let localStream = null, remoteAudio = null;
+let callTimerInterval = null, callStartTime = 0;
+let mediaRecorder = null, voiceChunks = [];
+let isRecording = false, isCaller = false;
+let peerConnected = false;
+
+const $ = id => document.getElementById(id);
+const myCode = $('myCode'), codeBox = $('codeBox'), connectBox = $('connectBox');
+const divider = $('divider'), btnConnect = $('btnConnect'), peerInput = $('peerInput');
+const splash = $('splash'), chatEl = $('chat'), messagesEl = $('messages');
+const textInput = $('textInput'), btnSend = $('btnSend'), btnVoice = $('btnVoice');
+const btnCall = $('btnCall'), btnHangup = $('btnHangup');
+const callOverlay = $('callOverlay'), callAvatar = $('callAvatar');
+const callName = $('callName'), callStatus = $('callStatus'), callTimer = $('callTimer');
+const btnEndCall = $('btnEndCall'), toastEl = $('toast');
+const spinner = $('spinner'), initStatus = $('initStatus');
+const peerName = $('peerName'), peerAvatar = $('peerAvatar');
+
+function genCode(){ return String(Math.floor(100000+Math.random()*900000)); }
+
+function showToast(msg, dur=2500){
+  toastEl.textContent = msg;
+  toastEl.classList.add('show');
+  setTimeout(()=>toastEl.classList.remove('show'), dur);
+}
+
+function now(){ return new Date().toLocaleTimeString('ru',{hour:'2-digit',minute:'2-digit'}); }
+
+function addMsg(text, sent, isAudio=false, audioData=null){
+  const div = document.createElement('div');
+  div.className = 'msg '+(sent?'sent':'received');
+  if(isAudio){
+    div.classList.add('audio');
+    div.innerHTML = '<span class="play-icon">&#9654;</span><div class="wave"></div><span style="font-size:12px;opacity:.7">голосовое</span><span class="time">'+now()+'</span>';
+    div._audio = audioData;
+    div.onclick = function(){
+      if(!this._played){
+        this._played = true;
+        this.querySelector('.play-icon').textContent = '⏸';
+      } else {
+        this._played = false;
+        this.querySelector('.play-icon').textContent = '▶';
+      }
+      const a = new Audio('data:audio/webm;base64,'+this._audio);
+      a.play();
+    };
+  } else {
+    div.innerHTML = text.replace(/</g,'&lt;') + '<span class="time">'+now()+'</span>';
+  }
+  messagesEl.appendChild(div);
+  messagesEl.scrollTop = messagesEl.scrollHeight;
+}
+
+function initPeer(){
+  let code = genCode();
+  peer = new Peer(peerPrefix + code, {debug: 0});
+  
+  peer.on('open', id => {
+    spinner.style.display = 'none';
+    initStatus.style.display = 'none';
+    codeBox.style.display = 'block';
+    divider.style.display = 'block';
+    connectBox.style.display = 'flex';
+    myCode.textContent = code;
+  });
+
+  peer.on('error', err => {
+    if(err.type === 'unavailable-id'){
+      code = genCode();
+      peer.destroy();
+      setTimeout(initPeer, 100);
+    } else if(err.type === 'peer-unavailable'){
+      showToast('Код не найден. Проверьте и попробуйте снова.');
+      btnConnect.disabled = false;
+      btnConnect.textContent = 'Связаться';
+    } else {
+      console.error('Peer error:', err.type, err);
+    }
+  });
+
+  peer.on('connection', c => {
+    conn = c;
+    setupConn();
+    enterChat();
+  });
+
+  peer.on('call', c => {
+    call = c;
+    isCaller = false;
+    navigator.mediaDevices.getUserMedia({audio: true}).then(stream => {
+      localStream = stream;
+      call.answer(stream);
+      setupCall();
+      showCallOverlay();
+    }).catch(()=>{
+      showToast('Нет доступа к микрофону');
+      call.close();
+    });
+  });
+}
+
+function setupConn(){
+  conn.on('data', data => {
+    if(data.type === 'text'){
+      addMsg(data.text, false);
+    } else if(data.type === 'audio'){
+      addMsg(null, false, true, data.data);
+    } else if(data.type === 'call-request'){
+      // incoming call handled by peer.on('call')
+    } else if(data.type === 'end-call'){
+      endCall(false);
+    }
+  });
+  conn.on('close', ()=>{
+    $('peerStatus').textContent = 'Не в сети';
+    $('peerStatus').style.color = 'var(--muted)';
+    $('peerStatus').innerHTML = 'Не в сети';
+    showToast('Собеседник отключился');
+    peerConnected = false;
+  });
+  peerConnected = true;
+}
+
+function connectToPeer(code){
+  btnConnect.disabled = true;
+  btnConnect.textContent = 'Подключение...';
+  conn = peer.connect(peerPrefix + code, {reliable: true});
+  conn.on('open', ()=>{
+    enterChat();
+  });
+  conn.on('error', ()=>{
+    showToast('Не удалось подключиться');
+    btnConnect.disabled = false;
+    btnConnect.textContent = 'Связаться';
+  });
+  setupConn();
+}
+
+function enterChat(){
+  splash.style.display = 'none';
+  chatEl.style.display = 'flex';
+  showToast('Вы подключены!');
+}
+
+function sendText(){
+  const text = textInput.value.trim();
+  if(!text || !conn || !conn.open) return;
+  conn.send({type:'text', text});
+  addMsg(text, true);
+  textInput.value = '';
+}
+
+/* — Voice messages — */
+function startRecording(){
+  if(!conn || !conn.open){ showToast('Нет подключения'); return; }
+  navigator.mediaDevices.getUserMedia({audio: true}).then(stream=>{
+    voiceChunks = [];
+    mediaRecorder = new MediaRecorder(stream);
+    mediaRecorder.ondataavailable = e => { if(e.data.size>0) voiceChunks.push(e.data); };
+    mediaRecorder.onstop = ()=>{
+      const blob = new Blob(voiceChunks, {type:'audio/webm'});
+      if(blob.size > 300000){
+        showToast('Сообщение слишком длинное (макс ~10 сек)');
+      } else {
+        const reader = new FileReader();
+        reader.onloadend = ()=>{
+          const b64 = reader.result.split(',')[1];
+          conn.send({type:'audio', data:b64});
+          addMsg(null, true, true, b64);
+        };
+        reader.readAsDataURL(blob);
+      }
+      stream.getTracks().forEach(t=>t.stop());
+    };
+    mediaRecorder.start();
+    isRecording = true;
+    btnVoice.classList.add('recording');
+    btnVoice.innerHTML = '&#11035;';
+  }).catch(()=>{
+    showToast('Нет доступа к микрофону');
+  });
+}
+
+function stopRecording(){
+  if(!isRecording) return;
+  isRecording = false;
+  btnVoice.classList.remove('recording');
+  btnVoice.innerHTML = '&#127908;';
+  if(mediaRecorder && mediaRecorder.state !== 'inactive') mediaRecorder.stop();
+}
+
+/* — Calls — */
+function startCall(){
+  if(!conn || !conn.open){ showToast('Нет подключения'); return; }
+  if(call && call.peerConnection){ return; }
+  isCaller = true;
+  navigator.mediaDevices.getUserMedia({audio:true}).then(stream=>{
+    localStream = stream;
+    call = peer.call(conn.peer, stream);
+    setupCall();
+    showCallOverlay();
+  }).catch(()=>{
+    showToast('Нет доступа к микрофону');
+  });
+}
+
+function setupCall(){
+  remoteAudio = document.createElement('audio');
+  remoteAudio.autoplay = true;
+  call.on('stream', remoteStream=>{
+    remoteAudio.srcObject = remoteStream;
+    remoteAudio.play();
+    callStatus.textContent = 'Разговор';
+    startCallTimer();
+  });
+  call.on('close', ()=> endCall(false));
+  call.on('error', ()=> endCall(false));
+}
+
+function showCallOverlay(){
+  callOverlay.classList.add('active');
+  callAvatar.textContent = peerName.textContent[0] || '?';
+  callName.textContent = peerName.textContent;
+  callStatus.textContent = isCaller ? 'Вызов...' : 'Входящий вызов';
+  callTimer.textContent = '';
+  btnCall.style.display = 'none';
+  btnHangup.style.display = 'flex';
+}
+
+function hideCallOverlay(){
+  callOverlay.classList.remove('active');
+  btnCall.style.display = 'flex';
+  btnHangup.style.display = 'none';
+}
+
+function startCallTimer(){
+  callStartTime = Date.now();
+  callTimerInterval = setInterval(()=>{
+    const s = Math.floor((Date.now()-callStartTime)/1000);
+    const m = Math.floor(s/60);
+    callTimer.textContent = (m<10?'0':'')+m+':'+(s%60<10?'0':'')+(s%60);
+  }, 1000);
+}
+
+function endCall(notify=true){
+  if(callTimerInterval){ clearInterval(callTimerInterval); callTimerInterval=null; }
+  if(call){ try{call.close();}catch(e){} call=null; }
+  if(localStream){ localStream.getTracks().forEach(t=>t.stop()); localStream=null; }
+  if(remoteAudio){ remoteAudio.srcObject=null; remoteAudio=null; }
+  hideCallOverlay();
+  if(notify && conn && conn.open) conn.send({type:'end-call'});
+}
+
+/* — Events — */
+btnConnect.onclick = ()=>{
+  const code = peerInput.value.trim();
+  if(code.length !== 6){ showToast('Код состоит из 6 цифр'); return; }
+  connectToPeer(code);
+};
+peerInput.addEventListener('keydown', e=>{
+  if(e.key === 'Enter') btnConnect.click();
+  peerInput.value = peerInput.value.replace(/\D/g,'');
+});
+peerInput.addEventListener('input', ()=>{
+  peerInput.value = peerInput.value.replace(/\D/g,'').slice(0,6);
+});
+
+myCode.onclick = ()=>{
+  navigator.clipboard.writeText(myCode.textContent).then(()=> showToast('Код скопирован!'));
+};
+
+btnSend.onclick = sendText;
+textInput.addEventListener('keydown', e=>{ if(e.key==='Enter') sendText(); });
+
+/* Voice: hold to record (mouse) */
+btnVoice.addEventListener('mousedown', startRecording);
+btnVoice.addEventListener('mouseup', stopRecording);
+btnVoice.addEventListener('mouseleave', stopRecording);
+/* Touch */
+btnVoice.addEventListener('touchstart', e=>{ e.preventDefault(); startRecording(); });
+btnVoice.addEventListener('touchend', e=>{ e.preventDefault(); stopRecording(); });
+
+btnCall.onclick = startCall;
+btnHangup.onclick = ()=> endCall(true);
+btnEndCall.onclick = ()=> endCall(true);
+
+/* Start */
+initPeer();
+</script>
+</body>
+</html>
